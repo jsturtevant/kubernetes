@@ -21,7 +21,7 @@ package kuberuntime
 import (
 	"runtime"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/securitycontext"
@@ -120,6 +120,10 @@ func (m *kubeGenericRuntimeManager) generateWindowsContainerConfig(container *v1
 	// override with Windows options if present
 	if effectiveSc.WindowsOptions != nil && effectiveSc.WindowsOptions.RunAsUserName != nil {
 		wc.SecurityContext.RunAsUsername = *effectiveSc.WindowsOptions.RunAsUserName
+	}
+
+	if securitycontext.HasWindowsHostProcessRequest(pod, container) {
+		wc.SecurityContext.HostProcess = true
 	}
 
 	return wc, nil

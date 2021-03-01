@@ -25,6 +25,7 @@ import (
 	"k8s.io/klog/v2"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/types"
+	sc "k8s.io/kubernetes/pkg/securitycontext"
 )
 
 const (
@@ -38,6 +39,8 @@ const (
 	containerTerminationMessagePolicyLabel = "io.kubernetes.container.terminationMessagePolicy"
 	containerPreStopHandlerLabel           = "io.kubernetes.container.preStopHandler"
 	containerPortsLabel                    = "io.kubernetes.container.ports"
+
+	windowsHostProcessContainer = "microsoft.com/hostprocess-container"
 )
 
 type labeledPodSandboxInfo struct {
@@ -89,7 +92,20 @@ func newPodLabels(pod *v1.Pod) map[string]string {
 
 // newPodAnnotations creates pod annotations from v1.Pod.
 func newPodAnnotations(pod *v1.Pod) map[string]string {
-	return pod.Annotations
+	annotations := map[string]string{}
+
+	// Get annotations from v1.Pod
+	for k, v := range pod.Annotations {
+		annotations[k] = v
+	}
+
+	if kubecontainer.HasWindowsHostProcessContainer(pod) {
+		// While WindowsHostProcessContainers is in alpha pass 'microsoft.com/hostprocess-container' annotation
+		// to pod sandbox creations request. ContainerD on Windows does not yet fully support HostProcess
+		// containers but will pass annotations to hcsshim which does have support.
+		annotations[windowsHostProcessContainer] = "true"
+	}
+	return annotations
 }
 
 // newContainerLabels creates container labels from v1.Container and v1.Pod.
@@ -141,6 +157,13 @@ func newContainerAnnotations(container *v1.Container, pod *v1.Pod, restartCount 
 		} else {
 			annotations[containerPortsLabel] = string(rawContainerPorts)
 		}
+	}
+
+	if sc.HasWindowsHostProcessRequest(pod, container) {
+		// While WindowsHostProcessContainers is in alpha pass 'microsoft.com/hostprocess-container' annotation
+		// to create containers request. ContainerD on Windows does not yet fully support HostProcess containers
+		// but will pass annotations to hcsshim which does have support.
+		annotations[windowsHostProcessContainer] = "true"
 	}
 
 	return annotations
