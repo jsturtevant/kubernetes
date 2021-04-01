@@ -25,9 +25,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/tools/cache"
-	watchtools "k8s.io/client-go/tools/watch"
 
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -442,33 +439,24 @@ func testRSLifeCycle(f *framework.Framework) {
 	zero := int64(0)
 
 	// Create webserver pods.
+	podName := "sample-pod"
 	rsPodLabels := map[string]string{
-		"name": "sample-pod",
+		"name": podName,
 		"pod":  WebserverImageName,
 	}
 
 	rsName := "test-rs"
-	label := "test-rs=patched"
 	labelMap := map[string]string{"test-rs": "patched"}
 	replicas := int32(1)
 	rsPatchReplicas := int32(3)
 	rsPatchImage := imageutils.GetE2EImage(imageutils.Pause)
-
-	w := &cache.ListWatch{
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-			options.LabelSelector = label
-			return f.ClientSet.AppsV1().ReplicaSets(ns).Watch(context.TODO(), options)
-		},
-	}
-	rsList, err := f.ClientSet.AppsV1().ReplicaSets("").List(context.TODO(), metav1.ListOptions{LabelSelector: label})
-	framework.ExpectNoError(err, "failed to list rsList")
 	// Create a ReplicaSet
 	rs := newRS(rsName, replicas, rsPodLabels, WebserverImageName, WebserverImage, nil)
-	_, err = c.AppsV1().ReplicaSets(ns).Create(context.TODO(), rs, metav1.CreateOptions{})
+	_, err := c.AppsV1().ReplicaSets(ns).Create(context.TODO(), rs, metav1.CreateOptions{})
 	framework.ExpectNoError(err)
 
 	// Verify that the required pods have come up.
-	err = e2epod.VerifyPodsRunning(c, ns, "sample-pod", false, replicas)
+	err = e2epod.VerifyPodsRunning(c, ns, podName, false, replicas)
 	framework.ExpectNoError(err, "Failed to create pods: %s", err)
 
 	// Scale the ReplicaSet
@@ -502,24 +490,24 @@ func testRSLifeCycle(f *framework.Framework) {
 	_, err = f.ClientSet.AppsV1().ReplicaSets(ns).Patch(context.TODO(), rsName, types.StrategicMergePatchType, []byte(rsPatch), metav1.PatchOptions{})
 	framework.ExpectNoError(err, "failed to patch ReplicaSet")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	_, err = watchtools.Until(ctx, rsList.ResourceVersion, w, func(event watch.Event) (bool, error) {
-		if rset, ok := event.Object.(*appsv1.ReplicaSet); ok {
-			found := rset.ObjectMeta.Name == rsName &&
-				rset.ObjectMeta.Labels["test-rs"] == "patched" &&
-				rset.Status.ReadyReplicas == rsPatchReplicas &&
-				rset.Status.AvailableReplicas == rsPatchReplicas &&
-				rset.Spec.Template.Spec.Containers[0].Image == rsPatchImage
-			if !found {
-				framework.Logf("observed ReplicaSet %v in namespace %v with ReadyReplicas %v, AvailableReplicas %v", rset.ObjectMeta.Name, rset.ObjectMeta.Namespace, rset.Status.ReadyReplicas,
-					rset.Status.AvailableReplicas)
-			} else {
-				framework.Logf("observed Replicaset %v in namespace %v with ReadyReplicas %v found %v", rset.ObjectMeta.Name, rset.ObjectMeta.Namespace, rset.Status.ReadyReplicas, found)
-			}
-			return found, nil
+	ginkgo.By("Waiting for replicas to start running")
+	err = e2epod.VerifyPodsRunning(c, ns, podName, false, rsPatchReplicas)
+	framework.ExpectNoError(err, "Failed to create pods: %s", err)
+
+	ginkgo.By("Verify replicaset has patched values")
+	err = wait.PollImmediate(1*time.Second, 1*time.Minute, func() (bool, error) {
+		rs, err = c.AppsV1().ReplicaSets(ns).Get(context.TODO(), rsName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
 		}
-		return false, nil
+
+		framework.Logf("observed ReplicaSet %v in namespace %v with ReadyReplicas %v, AvailableReplicas %v", rs.ObjectMeta.Name, rs.ObjectMeta.Namespace, rs.Status.ReadyReplicas,
+			rs.Status.AvailableReplicas)
+
+		return rs.ObjectMeta.Labels["test-rs"] == "patched" &&
+			rs.Status.ReadyReplicas == rsPatchReplicas &&
+			rs.Status.AvailableReplicas == rsPatchReplicas &&
+			rs.Spec.Template.Spec.Containers[0].Image == rsPatchImage, nil
 	})
 
 	framework.ExpectNoError(err, "failed to see replicas of %v in namespace %v scale to requested amount of %v", rs.Name, ns, rsPatchReplicas)
