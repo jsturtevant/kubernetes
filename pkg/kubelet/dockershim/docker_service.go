@@ -77,6 +77,9 @@ const (
 	// The expiration time of version cache.
 	versionCacheTTL = 60 * time.Second
 
+	// The expiration time of the info Cache.
+	infoCacheTTL = 60 * time.Second
+
 	defaultCgroupDriver = "cgroupfs"
 
 	// TODO: https://github.com/kubernetes/kubernetes/pull/31169 provides experimental
@@ -286,6 +289,13 @@ func NewDockerService(config *ClientConfig, podSandboxImage string, streamingCon
 		versionCacheTTL,
 	)
 
+	ds.infoCache = cache.NewObjectCache(
+		func() (interface{}, error) {
+			return ds.client.Info()
+		},
+		infoCacheTTL,
+	)
+
 	// Register prometheus metrics.
 	metrics.Register()
 
@@ -313,6 +323,9 @@ type dockerService struct {
 	// version checking for some operations. Use this cache to avoid querying
 	// the docker daemon every time we need to do such checks.
 	versionCache *cache.ObjectCache
+
+	// caches the info from the runtime.
+	infoCache *cache.ObjectCache
 
 	// containerCleanupInfos maps container IDs to the `containerCleanupInfo` structs
 	// needed to clean up after containers have been removed.
@@ -534,6 +547,20 @@ func (ds *dockerService) getDockerVersionFromCache() (*dockertypes.Version, erro
 		return nil, fmt.Errorf("converted to *dockertype.Version error")
 	}
 	return dv, nil
+}
+
+func (ds *dockerService) getDockerInfoFromCache() (*dockertypes.Info, error) {
+	// We only store on key in the cache.
+	const dummyKey = "info"
+	value, err := ds.infoCache.Get(dummyKey)
+	if err != nil {
+		return nil, err
+	}
+	i, ok := value.(*dockertypes.Info)
+	if !ok {
+		return nil, fmt.Errorf("converted to *dockertype.Info error")
+	}
+	return i, nil
 }
 
 func toAPIProtocol(protocol Protocol) v1.Protocol {

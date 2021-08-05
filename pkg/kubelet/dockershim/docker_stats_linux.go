@@ -26,23 +26,23 @@ import (
 	runtimeapi "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
 )
 
-func (ds *dockerService) getContainerStats(containerID string) (*runtimeapi.ContainerStats, error) {
-	info, err := ds.client.Info()
+func (ds *dockerService) getContainerStats(c *runtimeapi.Container) (*runtimeapi.ContainerStats, error) {
+	info, err := ds.getDockerInfoFromCache()
 	if err != nil {
 		return nil, err
 	}
 
-	statsJSON, err := ds.client.GetContainerStats(containerID)
+	statsJSON, err := ds.client.GetContainerStats(c.Id)
 	if err != nil {
 		return nil, err
 	}
 
-	containerJSON, err := ds.client.InspectContainerWithSize(containerID)
+	containerJSON, err := ds.client.InspectContainerWithSize(c.Id)
 	if err != nil {
 		return nil, err
 	}
 
-	statusResp, err := ds.ContainerStatus(context.Background(), &runtimeapi.ContainerStatusRequest{ContainerId: containerID})
+	statusResp, err := ds.ContainerStatus(context.Background(), &runtimeapi.ContainerStatusRequest{ContainerId: c.Id})
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func (ds *dockerService) getContainerStats(containerID string) (*runtimeapi.Cont
 	timestamp := time.Now().UnixNano()
 	containerStats := &runtimeapi.ContainerStats{
 		Attributes: &runtimeapi.ContainerAttributes{
-			Id:          containerID,
+			Id:          c.Id,
 			Metadata:    status.Metadata,
 			Labels:      status.Labels,
 			Annotations: status.Annotations,

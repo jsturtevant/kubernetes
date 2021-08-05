@@ -79,12 +79,20 @@ func newTestDockerService() (*dockerService, *libdocker.FakeDockerClient, *testi
 	c := libdocker.NewFakeDockerClient().WithClock(fakeClock).WithVersion("1.11.2", "1.23").WithRandSource(rand.NewSource(0))
 	pm := network.NewPluginManager(&network.NoopNetworkPlugin{})
 	ckm := newMockCheckpointManager()
+
+	infocache := cache.NewObjectCache(
+		func() (interface{}, error) {
+			return &dockertypes.Info{}, nil
+		},
+		infoCacheTTL,
+	)
 	return &dockerService{
 		client:            c,
 		os:                &containertest.FakeOS{},
 		network:           pm,
 		checkpointManager: ckm,
 		networkReady:      make(map[string]bool),
+		infoCache:         infocache,
 	}, c, fakeClock
 }
 
