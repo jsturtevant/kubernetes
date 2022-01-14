@@ -233,13 +233,18 @@ function kube::release::build_server_images() {
     rm -rf "${release_stage}"
     mkdir -p "${release_stage}/server/bin"
 
+    local server_bins=("${KUBE_SERVER_IMAGE_BINARIES[@]}")
+    if [[ "${platform%/*}" = 'windows' ]]; then
+      server_bins=("${KUBE_SERVER_IMAGE_BINARIES_WIN[@]}")
+    fi
+
     # This fancy expression will expand to prepend a path
     # (${LOCAL_OUTPUT_BINPATH}/${platform}/) to every item in the
     # KUBE_SERVER_IMAGE_BINARIES array.
-    cp "${KUBE_SERVER_IMAGE_BINARIES[@]/#/${LOCAL_OUTPUT_BINPATH}/${platform}/}" \
+    cp "${server_bins[@]/#/${LOCAL_OUTPUT_BINPATH}/${platform}/}" \
       "${release_stage}/server/bin/"
 
-    kube::release::create_docker_images_for_server "${release_stage}/server/bin" "${arch}"
+    kube::release::create_docker_images_for_server "${release_stage}/server/bin" "${arch}" "${platform}"
   done
 }
 
@@ -327,6 +332,7 @@ function kube::release::build_conformance_image() {
 # Args:
 #  $1 - binary_dir, the directory to save the tared images to.
 #  $2 - arch, architecture for which we are building docker images.
+#  $3 - platform, platform for which we are building docker images.
 function kube::release::create_docker_images_for_server() {
   # Create a sub-shell so that we don't pollute the outer environment
   (
@@ -336,9 +342,14 @@ function kube::release::create_docker_images_for_server() {
     local images_dir
     binary_dir="$1"
     arch="$2"
-    binaries=$(kube::build::get_docker_wrapped_binaries)
+    platform="$3"
     images_dir="${RELEASE_IMAGES}/${arch}"
     mkdir -p "${images_dir}"
+
+    binaries=$(kube::build::get_docker_wrapped_binaries)
+    if [[ "${platform%/*}" = 'windows' ]]; then
+      binaries=$(kube::build::get_docker_wrapped_binaries_windows)
+    fi
 
     # k8s.gcr.io is the constant tag in the docker archives, this is also the default for config scripts in GKE.
     # We can use KUBE_DOCKER_REGISTRY to include and extra registry in the docker archive.
@@ -374,6 +385,13 @@ function kube::release::create_docker_images_for_server() {
           docker_file_path="${KUBE_ROOT}/build/server-image/${binary_name}/Dockerfile"
       fi
 
+      if [[ "${platform%/*}" = 'windows' ]]; then
+        local osversion=${wrappable##*:}
+        docker_image_tag="${docker_registry}/${binary_name}-windows-${arch}-${osversion}:${docker_tag}"
+        docker_file_path="${KUBE_ROOT}/build/server-image/Dockerfile.windows"
+      fi
+
+
       kube::log::status "Starting docker build for image: ${binary_name}-${arch}"
       (
         rm -rf "${docker_build_path}"
@@ -383,7 +401,7 @@ function kube::release::create_docker_images_for_server() {
         local build_log="${docker_build_path}/build.log"
         if ! DOCKER_CLI_EXPERIMENTAL=enabled "${DOCKER[@]}" buildx build \
           -f "${docker_file_path}" \
-          --platform linux/"${arch}" \
+          --platform "${platform}"/"${arch}" \
           --load ${docker_build_opts:+"${docker_build_opts}"} \
           -t "${docker_image_tag}" \
           --build-arg BASEIMAGE="${base_image}" \

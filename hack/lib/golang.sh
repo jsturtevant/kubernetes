@@ -27,6 +27,7 @@ readonly KUBE_SUPPORTED_SERVER_PLATFORMS=(
   linux/arm64
   linux/s390x
   linux/ppc64le
+  windows/amd64
 )
 
 # The node platforms we build for
@@ -106,6 +107,19 @@ kube::golang::server_image_targets() {
 IFS=" " read -ra KUBE_SERVER_IMAGE_TARGETS <<< "$(kube::golang::server_image_targets)"
 readonly KUBE_SERVER_IMAGE_TARGETS
 readonly KUBE_SERVER_IMAGE_BINARIES=("${KUBE_SERVER_IMAGE_TARGETS[@]##*/}")
+
+# The set of server targets we build docker images for windows
+kube::golang::server_image_targets_windows() {
+  # NOTE: this contains cmd targets for kube::build::get_docker_wrapped_binaries
+  local targets=(
+    cmd/kube-proxy
+  )
+  echo "${targets[@]}"
+}
+
+IFS=" " read -ra KUBE_SERVER_IMAGE_TARGETS_WIN <<< "$(kube::golang::server_image_targets_windows)"
+readonly KUBE_SERVER_IMAGE_TARGETS_WIN
+readonly KUBE_SERVER_IMAGE_BINARIES_WIN=("${KUBE_SERVER_IMAGE_TARGETS_WIN[@]##*/}")
 
 # The set of conformance targets we build docker image for
 kube::golang::conformance_image_targets() {

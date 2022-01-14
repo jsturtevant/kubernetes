@@ -93,6 +93,7 @@ readonly KUBE_CONTAINER_RSYNC_PORT=8730
 readonly __default_debian_iptables_version=bullseye-v1.1.0
 readonly __default_go_runner_version=v2.3.1-go1.17.5-bullseye.0
 readonly __default_setcap_version=bullseye-v1.0.0
+readonly __default_windows_version=1809
 
 # These are the base images for the Docker-wrapped binaries.
 readonly KUBE_GORUNNER_IMAGE="${KUBE_GORUNNER_IMAGE:-$KUBE_BASE_IMAGE_REGISTRY/go-runner:$__default_go_runner_version}"
@@ -100,6 +101,8 @@ readonly KUBE_APISERVER_BASE_IMAGE="${KUBE_APISERVER_BASE_IMAGE:-$KUBE_GORUNNER_
 readonly KUBE_CONTROLLER_MANAGER_BASE_IMAGE="${KUBE_CONTROLLER_MANAGER_BASE_IMAGE:-$KUBE_GORUNNER_IMAGE}"
 readonly KUBE_SCHEDULER_BASE_IMAGE="${KUBE_SCHEDULER_BASE_IMAGE:-$KUBE_GORUNNER_IMAGE}"
 readonly KUBE_PROXY_BASE_IMAGE="${KUBE_PROXY_BASE_IMAGE:-$KUBE_BASE_IMAGE_REGISTRY/debian-iptables:$__default_debian_iptables_version}"
+readonly KUBE_PROXY_BASE_IMAGE_WINDOWS="${KUBE_PROXY_BASE_IMAGE_WINDOWS:-mcr.microsoft.com/windows/nanoserver}"
+
 
 # This is the image used in a multi-stage build to apply capabilities to Docker-wrapped binaries.
 readonly KUBE_BUILD_SETCAP_IMAGE="${KUBE_BUILD_SETCAP_IMAGE:-$KUBE_BASE_IMAGE_REGISTRY/setcap:$__default_setcap_version}"
@@ -110,7 +113,7 @@ readonly KUBE_BUILD_SETCAP_IMAGE="${KUBE_BUILD_SETCAP_IMAGE:-$KUBE_BASE_IMAGE_RE
 # `make` users can override any or all of the base images using the associated
 # environment variables.
 #
-# $1 - server architecture
+# $1 - platform
 kube::build::get_docker_wrapped_binaries() {
   ### If you change any of these lists, please also update DOCKERIZED_BINARIES
   ### in build/BUILD. And kube::golang::server_image_targets
@@ -123,6 +126,18 @@ kube::build::get_docker_wrapped_binaries() {
 
   echo "${targets[@]}"
 }
+
+kube::build::get_docker_wrapped_binaries_windows() {
+  ### If you change any of these lists, please also update DOCKERIZED_BINARIES
+  ### in build/BUILD. And kube::golang::server_image_targets
+  local targets=(
+    "kube-proxy.exe,${KUBE_PROXY_BASE_IMAGE_WINDOWS}:1809"
+    "kube-proxy.exe,${KUBE_PROXY_BASE_IMAGE_WINDOWS}:ltsc2022"
+  )
+
+  echo "${targets[@]}"
+}
+
 
 # ---------------------------------------------------------------------------
 # Basic setup functions

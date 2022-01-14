@@ -25,6 +25,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+
+KUBE_BUILD_PLATFORMS="linux/amd64 windows/amd64" 
+
 KUBE_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 source "${KUBE_ROOT}/build/common.sh"
 source "${KUBE_ROOT}/build/lib/release.sh"
