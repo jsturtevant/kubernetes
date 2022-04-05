@@ -446,12 +446,20 @@ func (config *NetworkingTestConfig) DialFromNode(protocol, targetIP string, targ
 	var cmd string
 	if protocol == "udp" {
 		cmd = fmt.Sprintf("echo hostName | nc -w 1 -u %s %d", targetIP, targetPort)
+		if framework.NodeOSDistroIs("windows") {
+			cmd = fmt.Sprintf("echo hostName | .\\bin\\nc -w 1 -u %s %d", targetIP, targetPort)
+		}
+
 	} else {
 		ipPort := net.JoinHostPort(targetIP, strconv.Itoa(targetPort))
 		// The current versions of curl included in CentOS and RHEL distros
 		// misinterpret square brackets around IPv6 as globbing, so use the -g
 		// argument to disable globbing to handle the IPv6 case.
-		cmd = fmt.Sprintf("curl -g -q -s --max-time 15 --connect-timeout 1 http://%s/hostName", ipPort)
+		curl := "curl"
+		if framework.NodeOSDistroIs("windows") {
+			curl = "curl.exe"
+		}
+		cmd = fmt.Sprintf("%s -g -q -s --max-time 15 --connect-timeout 1 http://%s/hostName", curl, ipPort)
 	}
 
 	// TODO: This simply tells us that we can reach the endpoints. Check that
@@ -757,6 +765,7 @@ func (config *NetworkingTestConfig) CreateService(serviceSpec *v1.Service) *v1.S
 func (config *NetworkingTestConfig) setupCore(selector map[string]string) {
 	ginkgo.By("Creating the service pods in kubernetes")
 	podName := "netserver"
+
 	config.EndpointPods = config.createNetProxyPods(podName, selector)
 
 	ginkgo.By("Creating test pods")

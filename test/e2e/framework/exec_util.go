@@ -134,7 +134,17 @@ func (f *Framework) ExecShellInPod(podName string, cmd string) string {
 
 // ExecShellInPodWithFullOutput executes the specified command on the Pod and returns stdout, stderr and error.
 func (f *Framework) ExecShellInPodWithFullOutput(podName string, cmd string) (string, string, error) {
-	return f.execCommandInPodWithFullOutput(podName, "/bin/sh", "-c", cmd)
+	withBase := []string{"/bin/sh", "-c", cmd}
+	if NodeOSDistroIs("windows") {
+		pod, err := f.PodClient().Get(context.TODO(), podName, metav1.GetOptions{})
+		ExpectNoError(err, "failed to get pod %v", podName)
+
+		// hostprocess containers don't have /bin/sh, it is in the container at the mount point
+		if pod.Spec.SecurityContext.WindowsOptions.HostProcess != nil && *pod.Spec.SecurityContext.WindowsOptions.HostProcess {
+			withBase = []string{"%CONTAINER_SANDBOX_MOUNT_POINT%\\bin\\sh", "/c", cmd}
+		}
+	}
+	return f.execCommandInPodWithFullOutput(podName, withBase...)
 }
 
 func execute(method string, url *url.URL, config *restclient.Config, stdin io.Reader, stdout, stderr io.Writer, tty bool) error {

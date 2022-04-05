@@ -543,6 +543,10 @@ func NewAgnhostContainer(containerName string, mounts []v1.VolumeMount, ports []
 func NewExecPodSpec(ns, name string, hostNetwork bool) *v1.Pod {
 	pod := NewAgnhostPod(ns, name, nil, nil, nil)
 	pod.Spec.HostNetwork = hostNetwork
+	if pod.Spec.HostNetwork && NodeOSDistroIs("windows") {
+		WithWindowsHostProcess(pod, "")
+		pod.Spec.Containers[0].Command = []string{"%CONTAINER_SANDBOX_MOUNT_POINT%\\agnhost"}
+	}
 	return pod
 }
 
