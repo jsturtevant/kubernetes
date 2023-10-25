@@ -154,6 +154,9 @@ func (h *hostExecutor) exec(ctx context.Context, cmd string, node *v1.Node) (Res
 		"-c",
 		cmd,
 	}
+	if framework.NodeOSDistroIs("windows") {
+		args = []string{"$env:CONTAINER_SANDBOX_MOUNT_POINT/bin/sh", "-c", cmd}
+	}
 	containerName := pod.Spec.Containers[0].Name
 	var err error
 	result.Stdout, result.Stderr, err = e2epod.ExecWithOptions(h.Framework, e2epod.ExecOptions{
