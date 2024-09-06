@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -139,7 +140,8 @@ func (s *server) start() error {
 		s.startCommand.Stderr = outfile
 
 		// If monitorParent is set, set Pdeathsig when starting the server.
-		if s.monitorParent {
+		// TODO: maybe start a job object and assign the child process to it https://stackoverflow.com/questions/53208/how-do-i-automatically-destroy-child-processes-in-windows
+		if s.monitorParent && runtime.GOOS != "windows" {
 			// Death of this test process should kill the server as well.
 			attrs := &syscall.SysProcAttr{}
 			// Hack to set linux-only field without build tags.

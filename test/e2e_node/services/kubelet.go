@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -139,6 +140,9 @@ func baseKubeConfiguration(cfgPath string) (*kubeletconfig.KubeletConfiguration,
 			"nodefs.inodesFree": "5%",
 		}
 
+		if runtime.GOOS == "windows" {
+			kc.ResolverConfig = ""
+		}
 		return kc, nil
 	}
 
@@ -309,6 +313,9 @@ func (e *E2EServices) startKubelet(featureGates map[string]bool) (*server, error
 	}
 	// add the flag to load config from a file
 	cmdArgs = append(cmdArgs, "--config", kubeletConfigPath)
+
+	// stop eviction manager
+	cmdArgs = append(cmdArgs, "--image-gc-high-threshold", "95")
 
 	// Override the default kubelet flags.
 	cmdArgs = append(cmdArgs, kubeletArgs...)
